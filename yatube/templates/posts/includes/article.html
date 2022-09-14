@@ -1,0 +1,23 @@
+{% load thumbnail %}
+{% load cache %}
+<article>
+  <ul>
+    <li>
+      <b>Автор: {{ post.author.get_full_name }}</b>
+    </li>
+    <li>
+      <b>Дата публикации: {{ post.pub_date|date:"d E Y" }}</b>
+    </li>
+  </ul>
+  {% thumbnail post.image "350x400" crop='center' upscale=True as im %}
+    <img src="{{ im.url }}" width="{{ im.width }}" height="{{ im.height }}">
+  {% endthumbnail %} <br>
+  <p>
+     {{ post.text|linebreaksbr }}
+  </p>
+  <a href="{% url 'posts:post_detail' post.id %}">подробная информация</a>
+  <br>   
+  {% if post.group and not group %}
+    <a href="{% url 'posts:group_list' post.group.slug %}">все записи группы</a>
+  {% endif %}
+</article>

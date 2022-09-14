@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% load thumbnail %}
+{% block title %}
+<title> Пост {{ post.text|truncatechars:30 }}</title>
+{% endblock %}
+{% block content %}
+<div class="container py-5">
+  <div class="row">
+    <aside class="col-12 col-md-3">
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item list-group-item-warning">Дата публикации: {{ post.pub_date|date:"d E Y" }} </li>
+        {% if post.group %} 
+          <li class="list-group-item list-group-item-primary">Группа: {{ post.group.title }}
+            <a href="{% url 'Posts:group_list' post.group.slug %}">все записи группы</a> 
+         </li>
+        {% endif %}
+         <li class="list-group-item list-group-item-success">Автор: {{ post.author.get_full_name }} {{ post.author.username }}</li>
+         <li class="list-group-item list-group-item-danger d-flex justify-content-between align-items-center">
+            Всего постов автора:  <span>{{ post.author.posts.count }}</span>
+         </li>
+         <li class="list-group-item list-group-item-info">
+           <a href="{% url 'posts:profile' post.author.username %}">все посты пользователя</a>
+         </li>
+      </ul>
+    </aside>
+    <article class="col-12 col-md-9">
+    {% thumbnail post.image "350x400" crop='center' upscale=True as im %}
+      <img src="{{ im.url }}" width="{{ im.width }}" height="{{ im.height }}">
+    {% endthumbnail %}
+    <article class="col-12 col-md-9">
+      <p>{{ post.text|linebreaksbr }}</p>
+        {% if post.author == request.user %}
+          <a class="btn btn-primary" href="{% url 'posts:post_edit' post.id %}">
+            Редактировать запись
+          </a>
+        {% endif %}
+        {% include 'posts/includes/comments.html' %}
+    </article>
+  </div> 
+</div>  
+{% endblock %}

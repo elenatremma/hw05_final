@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}
+<title>Об авторе</title>
+{% endblock %}
+{% block content %}
+{% load static %}
+<div class="container py-2">
+  <h3>Меня зовут <span style="color:red">Л</span>ена <span style="color:red">Т</span>рембовельская</h3
+  <p>
+    <img src="{% static 'img/author.png' %}" width="140" height="180" class="d-inline-block align-top" alt="">
+  </p>
+  <p>
+    <ul>
+      <blockquote>
+        <h5><b>Люблю:</b></h5>
+        <li>Свою семью</li>
+        <li>Горные лыжи</li>
+        <li>Быструю езду</li>
+        <li>Петь</li>
+        <li>Учиться чему-то новому</li>
+        <li>Научную фантастику</li>
+    </blockquote>
+    <blockquote>
+        <h5><b>Не люблю:</b></h5>
+        <li>Соц.сети</li>
+        <li>Имбирь</li>
+        <li>Болеть</li>
+        <li>Компьютерные игры</li>
+        <li>Монотонную работу</li>
+    </blockquote> 
+  </p>
+  <p> Мои текущие работы: <a href=" url">https://github.com/elenatremma</a></p>
+</div>
+{% endblock %}
