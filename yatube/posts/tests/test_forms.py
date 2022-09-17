@@ -2,7 +2,6 @@ import shutil
 import tempfile
 import os
 
-from django.core.cache import cache
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
@@ -120,33 +119,22 @@ class PostFormTests(TestCase):
         странице поста.
         """
         comments_list = Comment.objects.count()
+        comments_old = list(Comment.objects.values_list('id', flat=True))
         form_data = {
-            'text': 'New comment to add'
+            'post': self.post,
+            'author': self.user,
+            'text': 'New comment to add',
         }
+
         self.authorized_client.post(
             reverse('posts:add_comment', kwargs={'post_id': self.post.id}),
             data=form_data,
             follow=True,
         )
         self.assertEqual(Comment.objects.count(), comments_list + 1)
-        self.assertTrue(
-            Comment.objects.filter(
-                text='New comment to add').exists()
+        new_comment = list(
+            Comment.objects.exclude(id__in=comments_old)
         )
-
-    def test_cache_index_page(self):
-        """Посты на странице index кешируются."""
-        response = self.client.get(reverse('posts:index'))
-        form_data = {
-            'text': 'Cache test text',
-        }
-        self.author.post(
-            reverse('posts:post_create'),
-            data=form_data,
-            follow=True
-        )
-        response = self.client.get(reverse('posts:index'))
-        self.assertNotIn(form_data['text'], response.content.decode())
-        cache.clear()
-        response = self.client.get(reverse('posts:index'))
-        self.assertIn(form_data['text'], response.content.decode())
+        self.assertEqual(new_comment[0].text, form_data['text'])
+        self.assertEqual(new_comment[0].author, self.user)
+        self.assertEqual(new_comment[0].post.id, form_data['post'].id)

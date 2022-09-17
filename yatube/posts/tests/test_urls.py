@@ -84,17 +84,20 @@ class PostURLTests(TestCase):
     def test_urls_redirect_anonymous_on_admin_login(self):
         """
         Редирект неавторизованного пользователя при
-        попытке создать, отредактировать пост или
-        создать комментарий к посту.
+        попытке создать, отредактировать пост
+        создать комментарий к посту или
+        подписаться на автора.
         """
-        redirect_1 = '/auth/login/?next=/create/'
-        redirect_2 = f'/auth/login/?next=/posts/{self.post.id}/edit/'
-        redirect_3 = f'/auth/login/?next=/posts/{self.post.id}/comment/'
-        urls = {
-            '/create/': redirect_1,
-            f'/posts/{self.post.id}/edit/': redirect_2,
-            f'/posts/{self.post.id}/comment/': redirect_3,
+        redir_1 = '/auth/login/?next=/create/'
+        redir_2 = f'/auth/login/?next=/posts/{self.post.id}/edit/'
+        redir_3 = f'/auth/login/?next=/posts/{self.post.id}/comment/'
+        redir_4 = f'/auth/login/?next=/profile/{self.user2.username}/follow/'
 
+        urls = {
+            '/create/': redir_1,
+            f'/posts/{self.post.id}/edit/': redir_2,
+            f'/posts/{self.post.id}/comment/': redir_3,
+            f'/profile/{self.user2.username}/follow/': redir_4,
         }
         for url, redirect in urls.items():
             with self.subTest(url=url):

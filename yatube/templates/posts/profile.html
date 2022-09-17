@@ -6,25 +6,30 @@
 {% block content %}
 <div class="container py-2">
   <div class="mb-5">
-  {% if following %}
-    <a
-      class="btn btn-lg btn-primary"
-      href="{% url 'posts:profile_unfollow' author.username %}" role="button"
-    >
-      Отписаться
-    </a>
-  {% else %}
-    <a
-      class="btn btn-lg btn-primary"
-      href="{% url 'posts:profile_follow' author.username %}" role="button"
-    >
-      Подписаться
-    </a>
-  {% endif %}
+    {% if user.is_authenticated %}
+      {% if author != request.user %}
+        {% if following %}
+        <a
+          class="btn btn-lg btn-success"
+          href="{% url 'posts:profile_unfollow' author.username %}" role="button"
+        >
+          Отписаться
+        </a>
+        {% else %} 
+        <a
+          class="btn btn-lg btn-primary"
+          href="{% url 'posts:profile_follow' author.username %}" role="button"
+        >
+         Подписаться
+        </a>
+        {% endif %}
+      {% endif %}
+    {% endif %}
   </div>
-  <h1>Все посты пользователя {{ author.username }}</h1>
-  <h3>Всего постов: {{ author.posts.count }}</h3>   
-  {% for post in page_obj %}          
+  <h3>Все посты пользователя <span class="badge bg-info">{{ author.username }}</span></h3>
+  <h4>Количество постов: <span class="badge bg-info">{{ author.posts.count }}</span></h4>
+  <h4>Количество подписок: <span class="badge bg-info">{{ author.following.count }}</span></h4>
+    {% for post in page_obj %}          
     {% include 'posts/includes/article.html' %}
     {% if not forloop.last %}<hr>{% endif %}
   {% endfor %}

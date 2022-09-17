@@ -1,14 +1,9 @@
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth import get_user_model
 
-
-from .models import Post, Group, Follow
+from .models import User, Post, Group, Follow
 from .forms import PostForm, CommentForm
 from .utils import pagination
-
-
-User = get_user_model()
 
 
 def index(request):
@@ -77,7 +72,7 @@ def post_create(request):
         request.POST or None,
         files=request.FILES or None,
     )
-    if request.method == 'POST' and form.is_valid():
+    if form.is_valid():
         post = form.save(commit=False)
         post.author = request.user
         post.save()
@@ -101,7 +96,7 @@ def post_edit(request, post_id):
         instance=post,
         files=request.FILES or None,
     )
-    if request.method == 'POST' and form.is_valid():
+    if form.is_valid():
         post = form.save(commit=False)
         post.author = request.user
         post.save()
@@ -125,6 +120,7 @@ def add_comment(request, post_id):
         comment.author = request.user
         comment.post = post
         comment.save()
+
     return redirect('posts:post_detail', post_id=post_id)
 
 
@@ -151,11 +147,11 @@ def profile_follow(request, username):
     subscription = Follow.objects.filter(user=request.user, author=author)
     if request.user == author or subscription.exists():
         return redirect('posts:profile', username=username)
-    else:
-        Follow.objects.create(
-            user=request.user,
-            author=author
-        )
+    Follow.objects.create(
+        user=request.user,
+        author=author,
+    )
+
     return redirect('posts:profile', username=username)
 
 
@@ -163,7 +159,6 @@ def profile_follow(request, username):
 def profile_unfollow(request, username):
     """Функция-обработчик, позволяющая отписаться от автора."""
     author = get_object_or_404(User, username=username)
-    subscription = Follow.objects.filter(user=request.user, author=author)
-    if subscription.exists():
-        Follow.objects.get(user=request.user, author=author).delete()
+    Follow.objects.filter(user=request.user, author=author).delete()
+
     return redirect('posts:index')

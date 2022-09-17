@@ -1,39 +1,72 @@
 import shutil
 import tempfile
 
+from django.core.cache import cache
 from django.conf import settings
 from django.test import Client, TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
-from django import forms
 from django.test import Client, TestCase, override_settings
 
 
-from ..models import Group, Post, User, Follow
+from ..models import Group, Post, User, Follow, Comment
 from ..constants import ALL_POSTS, POSTS_PER_PAGE
+from ..forms import PostForm, CommentForm
+
+TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
 
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class PostViewsTests(TestCase):
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.create_user(username='test user')
-        cls.authorized_client = Client()
-        cls.authorized_client.force_login(cls.user)
-        cls.user2 = User.objects.create_user(username='author')
-        cls.author = Client()
-        cls.author.force_login(cls.user2)
         cls.group = Group.objects.create(
             title='Test_group_title',
             slug='Test_URL',
             description='Test_description',
         )
-        cls.post = Post.objects.create(
-            text='Test_text',
-            author=cls.user2,
-            group=cls.group,
+
+    def setUp(self):
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.user)
+        self.user2 = User.objects.create_user(
+            username='author',
         )
+        self.author = Client()
+        self.author.force_login(self.user2)
+        self.user3 = User.objects.create_user(
+            username='subscribed_user',
+        )
+        self.subscribed_user = Client()
+        self.subscribed_user.force_login(self.user3)
+        self.small_gif = (
+            b'\x47\x49\x46\x38\x39\x61\x02\x00'
+            b'\x01\x00\x80\x00\x00\x00\x00\x00'
+            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+            b'\x0A\x00\x3B'
+        )
+        self.uploaded = SimpleUploadedFile(
+            name='small.gif',
+            content=self.small_gif,
+            content_type='image/gif'
+        )
+        self.post = Post.objects.create(
+            text='test post',
+            author=self.user2,
+            group=self.group,
+            image=self.uploaded,
+        )
+        self.new_comment = Comment.objects.create(
+            post=self.post,
+            author=self.user2,
+            text="New comment to add"
+        )
+        cache.clear()
 
     def post_params_to_check(self, post):
         """Перечень параметров для сравнения данных c эталонным постом."""
@@ -41,18 +74,17 @@ class PostViewsTests(TestCase):
         self.assertEqual(post.text, self.post.text)
         self.assertEqual(post.author, self.post.author)
         self.assertEqual(post.group, self.group)
-        self.assertEqual(post.group, self.group)
 
-    def form_field_response(self, response):
-        """Перечень параметров для проверки формы."""
-        form_fields = {
-            'text': forms.fields.CharField,
-            'group': forms.fields.ChoiceField,
-        }
-        for key, expected_value in form_fields.items():
-            with self.subTest(key=key):
-                form_field = response.context.get('form').fields.get(key)
-                self.assertIsInstance(form_field, expected_value)
+    def form_to_check(self, response):
+        """Создание экземпляра формы для проверки ее работы."""
+        form = response.context.get('form')
+        self.assertIsNotNone(form)
+        self.assertIsInstance(form, PostForm)
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def test_pages_use_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -71,6 +103,7 @@ class PostViewsTests(TestCase):
             reverse('posts:post_edit',
                     kwargs={'post_id':
                             self.post.id}): 'posts/create_post.html',
+            reverse('posts:follow_index'): 'posts/follow.html',
         }
         for url, template in templates_urls.items():
             with self.subTest(url=url):
@@ -116,6 +149,9 @@ class PostViewsTests(TestCase):
         response = self.author.get(reverse('posts:index'))
         post = response.context['page_obj'].object_list[0]
         self.post_params_to_check(post)
+        self.assertEqual(
+            response.context.get('page_obj')[0].image, self.post.image
+        )
 
     def test_group_list_page_show_correct_context(self):
         """Шаблон group_list сформирован с правильным контекстом."""
@@ -123,6 +159,7 @@ class PostViewsTests(TestCase):
             'posts:group_list',
             kwargs={'slug': self.group.slug})
         )
+        """Проверка объекта group из контекста."""
         self.assertEqual(
             response.context.get('group').title, self.group.title
         )
@@ -130,19 +167,43 @@ class PostViewsTests(TestCase):
         self.assertEqual(
             response.context.get('group').description, self.group.description
         )
+        """Проверка объекта post из контекста."""
         post = response.context['page_obj'].object_list[0]
         self.post_params_to_check(post)
+        self.assertEqual(
+            response.context.get('page_obj')[0].image, self.post.image
+        )
 
     def test_profile_page_show_correct_context(self):
-        """Шаблон index сформирован с правильным контекстом."""
+        """Шаблон profile сформирован с правильным контекстом."""
+        new_subscription = Follow.objects.create(
+            author=self.user2,
+            user=self.user3,
+        )
         response = self.author.get(reverse(
             'posts:profile',
             kwargs={'username': self.user2.username})
         )
+        """Проверка объекта author из контекста."""
         self.assertEqual(
             response.context.get('author'), self.post.author)
+        """Проверка объекта following из контекста."""
+        user_status = [
+            self.client,
+            self.authorized_client,
+            self.author,
+        ]
+        for user in user_status:
+            if new_subscription.user == user:
+                self.assertIsNone(response.context.get('following'))
+        if new_subscription.user == self.subscribed_user:
+            self.assertIsNotNone(response.context.get('following'))
+        """Проверка объекта post из контекста."""
         post = response.context['page_obj'].object_list[0]
         self.post_params_to_check(post)
+        self.assertEqual(
+            response.context.get('page_obj')[0].image, self.post.image
+        )
 
     def test_post_detail_page_show_correct_context(self):
         """Шаблон post_detail сформирован с правильным контекстом."""
@@ -151,8 +212,30 @@ class PostViewsTests(TestCase):
                 'posts:post_detail', kwargs={'post_id': self.post.id}
             )
         )
+        """Проверка объекта post из контекста."""
         post = response.context['post']
         self.post_params_to_check(post)
+        self.assertEqual(
+            response.context.get('post').image, self.post.image
+        )
+        """Проверка объекта form из контекста."""
+        form = response.context.get('form')
+        self.assertIsNotNone(form)
+        self.assertIsInstance(form, CommentForm)
+        """Проверка объекта comments из контекста."""
+        response = self.authorized_client.get(
+            reverse(
+                'posts:post_detail', kwargs={'post_id': self.post.id}
+            )
+        )
+        all_comments = self.post.comments.all()
+        self.assertQuerysetEqual(
+            response.context.get('comments'),
+            all_comments, transform=lambda x: x,
+        )
+        # Используем лямбда, # т.к. джля джанго 2.2 еще не придумали
+        # что трансформация может быть не нужна.
+        # Данный способ подсказал наставник.
 
     def test_post_create_page_show_correct_context(self):
         """
@@ -160,7 +243,7 @@ class PostViewsTests(TestCase):
         на создание поста.
         """
         response = self.author.get(reverse('posts:post_create'))
-        self.form_field_response(response)
+        self.form_to_check(response)
 
     def test_post_edit_show_correct_context(self):
         """
@@ -169,11 +252,54 @@ class PostViewsTests(TestCase):
         response = self.author.get(
             reverse('posts:post_edit', kwargs={'post_id': self.post.id})
         )
-        self.form_field_response(response)
+        """Проверка объекта post из контекста."""
         post = response.context['post']
         self.post_params_to_check(post)
+        """Проверка объекта form из контекста."""
+        self.form_to_check(response)
+        """Проверка объекта is_edit из контекста."""
         is_edit = response.context['is_edit']
         self.assertTrue(is_edit, True)
+
+    def test_cache_index_page(self):
+        """Посты на странице index кешируются."""
+        response = self.client.get(reverse('posts:index'))
+        new_post = Post.objects.create(
+            text='Cache test text',
+            author=self.user2,
+            group=self.group,
+        )
+        response = self.client.get(reverse('posts:index'))
+        self.assertNotIn(new_post.text, response.content.decode())
+        cache.clear()
+        response = self.client.get(reverse('posts:index'))
+        self.assertIn(new_post.text, response.content.decode())
+
+    def test_image_appears_on_index_group_list_profile(self):
+        """Картинка выводится на страницы index, group list и profile. """
+        urls = {
+            reverse('posts:index'),
+            reverse('posts:group_list', kwargs={
+                    'slug': self.group.slug}),
+            reverse('posts:profile', kwargs={
+                    'username': self.user2.username}),
+        }
+        for url in urls:
+            with self.subTest(urls=urls):
+                response = self.authorized_client.get(url)
+                self.assertEqual(
+                    response.context['page_obj'][0].image, self.post.image
+                )
+
+    def test_image_appears_on_post_detail(self):
+        """Картинка выводится на страницу post detail."""
+        response = self.authorized_client.get(
+            reverse('posts:post_detail', kwargs={
+                'post_id': self.post.id}
+            )
+        )
+        self.assertEqual(
+            response.context['post'].image, self.post.image)
 
 
 class PaginatorViewsTest(TestCase):
@@ -236,80 +362,6 @@ class PaginatorViewsTest(TestCase):
             )
 
 
-TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
-
-
-@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
-class ImageViewsTest(TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.user = User.objects.create_user(username='test user')
-        cls.group = Group.objects.create(
-            title='Test_group_title',
-            slug='Test_URL',
-            description='Test_description',
-        )
-        cls.small_gif = (
-            b'\x47\x49\x46\x38\x39\x61\x02\x00'
-            b'\x01\x00\x80\x00\x00\x00\x00\x00'
-            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
-            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
-            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
-            b'\x0A\x00\x3B'
-        )
-        cls.uploaded = SimpleUploadedFile(
-            name='small.gif',
-            content=cls.small_gif,
-            content_type='image/gif'
-        )
-        cls.post = Post.objects.create(
-            text='test post',
-            author=cls.user,
-            group=cls.group,
-            image=cls.uploaded,
-        )
-
-    def setUp(self):
-        self.authorized_client = Client()
-        self.authorized_client.force_login(self.user)
-        self.user2 = User.objects.create_user(username='author')
-        self.author = Client()
-        self.author.force_login(self.user2)
-
-    @classmethod
-    def tearDownClass(cls):
-        super().tearDownClass()
-        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
-
-    def test_image_appears_on_index_group_list_profile(self):
-        """Картинка выводится на страницы index, group list и profile. """
-        urls = {
-            reverse('posts:index'),
-            reverse('posts:group_list', kwargs={
-                    'slug': self.group.slug}),
-            reverse('posts:profile', kwargs={
-                    'username': self.user.username}),
-        }
-        for url in urls:
-            with self.subTest(urls=urls):
-                response = self.authorized_client.get(url)
-                self.assertEqual(response.context['page_obj'][0].image,
-                                 f'posts/{self.uploaded}')
-
-    def test_image_appears_on_post_detail(self):
-        """Картинка выводится на страницу post detail."""
-        response = self.authorized_client.get(
-            reverse('posts:post_detail', kwargs={
-                'post_id': self.post.id}
-            )
-        )
-        self.assertEqual(
-            response.context['post'].image, f'posts/{self.uploaded}'
-        )
-
-
 class FollowersViewsTest(TestCase):
 
     @classmethod
@@ -340,17 +392,18 @@ class FollowersViewsTest(TestCase):
         Авторизованный пользователь может подписываться
         на других пользоваталей.
         """
-        self.authorized_client.get(
+        follows_count = Follow.objects.count()
+        self.subscribed_user.post(
             reverse('posts:profile_follow', kwargs={
                 'username': self.user3.username}
             )
         )
+        self.assertEqual(Follow.objects.count(), follows_count + 1)
         self.assertTrue(
             Follow.objects.filter(
-                user=self.user,
+                user=self.user2,
                 author=self.user3).exists()
         )
-        self.assertEqual(Follow.objects.count(), 1)
 
     def test_subscribed_user_can_unfollow(self):
         """Подписчик может отписаться  от автора."""
@@ -367,30 +420,24 @@ class FollowersViewsTest(TestCase):
         new_subscription.delete()
         self.assertEqual(Follow.objects.count(), 0)
 
-    def test_guest_client_redirect(self):
-        """
-        Редирект неавторизованного пользователя при попытке
-        подписаться на автора.
-        """
-        response = self.client.get(
-            reverse('posts:profile_follow', kwargs={
-                'username': self.user3.username}
-            )
-        )
-        redirect = f'/auth/login/?next=/profile/{self.user3.username}/follow/'
-        self.assertRedirects(response, redirect)
-
-    def test_new_post_appears_for_subscribed_users_only(self):
+    def test_new_follow_appears_for_subscribed_users(self):
         """Новая запись появляется в ленте подписчиков."""
+        new_post = Post.objects.create(
+            text='Post text for subscribtion testing',
+            author=self.user3,
+        )
         Follow.objects.create(
             user=self.user2,
             author=self.user3,
         )
-        post = Post.objects.create(
-            text='Post text for subscribe testing',
+        response = self.subscribed_user.get(reverse('posts:follow_index'))
+        self.assertContains(response, new_post.text)
+
+    def test_new_follow_doesnt_appear_for_authorized_clients(self):
+        """Новая запись не появляется в ленте не подписанных пользователей."""
+        new_post = Post.objects.create(
+            text='Post text for subscribtion testing',
             author=self.user3,
         )
-        response = self.subscribed_user.get(reverse('posts:follow_index'))
-        self.assertContains(response, post.text)
         response = self.authorized_client.get(reverse('posts:follow_index'))
-        self.assertNotContains(response, post.text)
+        self.assertNotContains(response, new_post.text)

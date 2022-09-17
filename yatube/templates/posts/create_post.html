@@ -24,10 +24,6 @@
           <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             {% for field in form %}
-          {% comment %} <form method="post" action="{% if is_edit %}{% url 'posts:post_edit' post.id %}
-            {% else %}{% url 'posts:post_create' %}{% endif %}">
-          {% csrf_token %}
-          {% for field in form %} {% endcomment %}
             {% include "includes/form_cycle.html" %}
           {% endfor %}
            <div class="d-flex justify-content-end">

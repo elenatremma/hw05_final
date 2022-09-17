@@ -6,9 +6,9 @@
 {% endblock %}
 {% block content %}
   <div class="container py-2">
+    {% include 'posts/includes/switcher.html' %}
     <h1>Последние обновления на сайте</h1>
     {% cache 20 index_page  %}
-    {% include 'posts/includes/switcher.html' %}
     {% for post in page_obj %}   
       {% include 'posts/includes/article.html' %}
       {% if not forloop.last %}<hr>{% endif %}     
