@@ -74,6 +74,7 @@ class PostViewsTests(TestCase):
         self.assertEqual(post.text, self.post.text)
         self.assertEqual(post.author, self.post.author)
         self.assertEqual(post.group, self.group)
+        self.assertEqual(post.image, self.post.image)
 
     def form_to_check(self, response):
         """Создание экземпляра формы для проверки ее работы."""
@@ -149,9 +150,6 @@ class PostViewsTests(TestCase):
         response = self.author.get(reverse('posts:index'))
         post = response.context['page_obj'].object_list[0]
         self.post_params_to_check(post)
-        self.assertEqual(
-            response.context.get('page_obj')[0].image, self.post.image
-        )
 
     def test_group_list_page_show_correct_context(self):
         """Шаблон group_list сформирован с правильным контекстом."""
@@ -170,9 +168,6 @@ class PostViewsTests(TestCase):
         """Проверка объекта post из контекста."""
         post = response.context['page_obj'].object_list[0]
         self.post_params_to_check(post)
-        self.assertEqual(
-            response.context.get('page_obj')[0].image, self.post.image
-        )
 
     def test_profile_page_show_correct_context(self):
         """Шаблон profile сформирован с правильным контекстом."""
@@ -201,9 +196,6 @@ class PostViewsTests(TestCase):
         """Проверка объекта post из контекста."""
         post = response.context['page_obj'].object_list[0]
         self.post_params_to_check(post)
-        self.assertEqual(
-            response.context.get('page_obj')[0].image, self.post.image
-        )
 
     def test_post_detail_page_show_correct_context(self):
         """Шаблон post_detail сформирован с правильным контекстом."""
@@ -215,9 +207,6 @@ class PostViewsTests(TestCase):
         """Проверка объекта post из контекста."""
         post = response.context['post']
         self.post_params_to_check(post)
-        self.assertEqual(
-            response.context.get('post').image, self.post.image
-        )
         """Проверка объекта form из контекста."""
         form = response.context.get('form')
         self.assertIsNotNone(form)
@@ -233,9 +222,6 @@ class PostViewsTests(TestCase):
             response.context.get('comments'),
             all_comments, transform=lambda x: x,
         )
-        # Используем лямбда, # т.к. джля джанго 2.2 еще не придумали
-        # что трансформация может быть не нужна.
-        # Данный способ подсказал наставник.
 
     def test_post_create_page_show_correct_context(self):
         """
@@ -275,31 +261,69 @@ class PostViewsTests(TestCase):
         response = self.client.get(reverse('posts:index'))
         self.assertIn(new_post.text, response.content.decode())
 
-    def test_image_appears_on_index_group_list_profile(self):
-        """Картинка выводится на страницы index, group list и profile. """
-        urls = {
-            reverse('posts:index'),
-            reverse('posts:group_list', kwargs={
-                    'slug': self.group.slug}),
-            reverse('posts:profile', kwargs={
-                    'username': self.user2.username}),
-        }
-        for url in urls:
-            with self.subTest(urls=urls):
-                response = self.authorized_client.get(url)
-                self.assertEqual(
-                    response.context['page_obj'][0].image, self.post.image
-                )
-
-    def test_image_appears_on_post_detail(self):
-        """Картинка выводится на страницу post detail."""
-        response = self.authorized_client.get(
-            reverse('posts:post_detail', kwargs={
-                'post_id': self.post.id}
+    def test_authorized_client_can_follow(self):
+        """
+        Авторизованный пользователь может подписываться
+        на других пользователей.
+        """
+        self.assertFalse(
+            Follow.objects.filter(
+                user=self.user,
+                author=self.user2).exists()
+        )
+        follows_count = Follow.objects.count()
+        self.authorized_client.post(
+            reverse('posts:profile_follow', kwargs={
+                'username': self.user2.username}
             )
         )
-        self.assertEqual(
-            response.context['post'].image, self.post.image)
+        self.assertEqual(Follow.objects.count(), follows_count + 1)
+        self.assertTrue(
+            Follow.objects.filter(
+                user=self.user,
+                author=self.user2).exists()
+        )
+
+    def test_subscribed_user_can_unfollow(self):
+        """Подписчик может отписаться от автора."""
+        follows_count = Follow.objects.count()
+        Follow.objects.create(
+            user=self.user3,
+            author=self.user2
+        )
+        self.subscribed_user.post(
+            reverse('posts:profile_unfollow', kwargs={
+                'username': self.user2.username}
+            )
+        )
+        self.assertEqual(Follow.objects.count(), follows_count)
+        self.assertFalse(
+            Follow.objects.filter(
+                user=self.user,
+                author=self.user2).exists()
+        )
+
+    def test_new_follow_appears_for_subscribed_users(self):
+        """Новая запись появляется в ленте подписчиков."""
+        new_post = Post.objects.create(
+            text='Post text for subscribtion testing',
+            author=self.user2,
+        )
+        Follow.objects.create(
+            user=self.user3,
+            author=self.user2,
+        )
+        response = self.subscribed_user.get(reverse('posts:follow_index'))
+        self.assertContains(response, new_post.text)
+
+    def test_new_follow_does_not_appear_for_authorized_clients(self):
+        """Новая запись не появляется в ленте не подписанных пользователей."""
+        new_post = Post.objects.create(
+            text='Post text for subscribtion testing',
+            author=self.user2,
+        )
+        response = self.authorized_client.get(reverse('posts:follow_index'))
+        self.assertNotContains(response, new_post.text)
 
 
 class PaginatorViewsTest(TestCase):
@@ -360,84 +384,3 @@ class PaginatorViewsTest(TestCase):
                 response.context['page_obj']),
                 ALL_POSTS - POSTS_PER_PAGE,
             )
-
-
-class FollowersViewsTest(TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.user = User.objects.create_user(
-            username='not subscribed user',
-        )
-        cls.authorized_client = Client()
-        cls.authorized_client.force_login(cls.user)
-        cls.user2 = User.objects.create_user(
-            username='subscribed user',
-        )
-        cls.subscribed_user = Client()
-        cls.subscribed_user.force_login(cls.user2)
-        cls.user3 = User.objects.create_user(
-            username='author',
-        )
-        cls.author = Client()
-        cls.author.force_login(cls.user3)
-        cls.post = Post.objects.create(
-            text='Test_text',
-            author=cls.user2,
-        )
-
-    def test_authorized_client_can_follow(self):
-        """
-        Авторизованный пользователь может подписываться
-        на других пользоваталей.
-        """
-        follows_count = Follow.objects.count()
-        self.subscribed_user.post(
-            reverse('posts:profile_follow', kwargs={
-                'username': self.user3.username}
-            )
-        )
-        self.assertEqual(Follow.objects.count(), follows_count + 1)
-        self.assertTrue(
-            Follow.objects.filter(
-                user=self.user2,
-                author=self.user3).exists()
-        )
-
-    def test_subscribed_user_can_unfollow(self):
-        """Подписчик может отписаться  от автора."""
-        Follow.objects.count()
-        new_subscription = Follow.objects.create(
-            user=self.user,
-            author=self.user3
-        )
-        self.subscribed_user.get(
-            reverse('posts:profile_unfollow', kwargs={
-                'username': self.user3.username}
-            )
-        )
-        new_subscription.delete()
-        self.assertEqual(Follow.objects.count(), 0)
-
-    def test_new_follow_appears_for_subscribed_users(self):
-        """Новая запись появляется в ленте подписчиков."""
-        new_post = Post.objects.create(
-            text='Post text for subscribtion testing',
-            author=self.user3,
-        )
-        Follow.objects.create(
-            user=self.user2,
-            author=self.user3,
-        )
-        response = self.subscribed_user.get(reverse('posts:follow_index'))
-        self.assertContains(response, new_post.text)
-
-    def test_new_follow_doesnt_appear_for_authorized_clients(self):
-        """Новая запись не появляется в ленте не подписанных пользователей."""
-        new_post = Post.objects.create(
-            text='Post text for subscribtion testing',
-            author=self.user3,
-        )
-        response = self.authorized_client.get(reverse('posts:follow_index'))
-        self.assertNotContains(response, new_post.text)

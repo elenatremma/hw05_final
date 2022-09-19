@@ -88,12 +88,12 @@ class PostFormTests(TestCase):
             'posts:profile', kwargs={'username': self.user2.username}),
         )
         self.assertEqual(Post.objects.count(), post_list + 1)
-        new_post = list(Post.objects.exclude(id__in=posts_old))
-        self.assertEqual(new_post[0].text, self.form_data['text'])
-        self.assertEqual(new_post[0].author, self.post.author)
-        self.assertEqual(new_post[0].group.id, self.form_data['group'])
+        new_posts = list(Post.objects.exclude(id__in=posts_old))
+        self.assertEqual(new_posts[0].text, self.form_data['text'])
+        self.assertEqual(new_posts[0].author, self.post.author)
+        self.assertEqual(new_posts[0].group.id, self.form_data['group'])
         self.assertEqual(os.path.basename(
-            new_post[0].image.name), self.form_data['image'].name)
+            new_posts[0].image.name), self.form_data['image'].name)
 
     def test_post_edit(self):
         """
@@ -122,19 +122,17 @@ class PostFormTests(TestCase):
         comments_old = list(Comment.objects.values_list('id', flat=True))
         form_data = {
             'post': self.post,
-            'author': self.user,
             'text': 'New comment to add',
         }
-
         self.authorized_client.post(
             reverse('posts:add_comment', kwargs={'post_id': self.post.id}),
             data=form_data,
             follow=True,
         )
         self.assertEqual(Comment.objects.count(), comments_list + 1)
-        new_comment = list(
+        new_comments = list(
             Comment.objects.exclude(id__in=comments_old)
         )
-        self.assertEqual(new_comment[0].text, form_data['text'])
-        self.assertEqual(new_comment[0].author, self.user)
-        self.assertEqual(new_comment[0].post.id, form_data['post'].id)
+        self.assertEqual(new_comments[0].text, form_data['text'])
+        self.assertEqual(new_comments[0].author, self.user)
+        self.assertEqual(new_comments[0].post.id, form_data['post'].id)

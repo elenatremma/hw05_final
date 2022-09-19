@@ -28,7 +28,8 @@
   </div>
   <h3>Все посты пользователя <span class="badge bg-info">{{ author.username }}</span></h3>
   <h4>Количество постов: <span class="badge bg-info">{{ author.posts.count }}</span></h4>
-  <h4>Количество подписок: <span class="badge bg-info">{{ author.following.count }}</span></h4>
+  <h4>Количество подписок: <span class="badge bg-info">{{ author.follower.count }}</span></h4>
+  <h4>Количество подписчиков: <span class="badge bg-info">{{ author.following.count}}</span></h4>
     {% for post in page_obj %}          
     {% include 'posts/includes/article.html' %}
     {% if not forloop.last %}<hr>{% endif %}
