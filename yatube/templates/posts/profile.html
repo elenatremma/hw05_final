@@ -10,7 +10,7 @@
       {% if author != request.user %}
         {% if following %}
         <a
-          class="btn btn-lg btn-success"
+          class="btn btn-lg btn-primary"
           href="{% url 'posts:profile_unfollow' author.username %}" role="button"
         >
           Отписаться

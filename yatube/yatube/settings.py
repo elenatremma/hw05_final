@@ -19,6 +19,8 @@ ALLOWED_HOSTS = [
     '[::1]',
     'testserver',
 ]
+    # 'www.tremma.pythonanywhere.com',
+    # 'tremma.pythonanywhere.com',
 
 LOGIN_URL = 'users:login'
 
@@ -37,6 +39,7 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'about.apps.AboutConfig',
     'sorl.thumbnail',
+    'debug_toolbar',
 ]
 
 MIDDLEWARE = [
@@ -47,6 +50,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'debug_toolbar.middleware.DebugToolbarMiddleware',
+    ]
+
+INTERNAL_IPS = [
+    '127.0.0.1',
 ]
 
 ROOT_URLCONF = 'yatube.urls'
