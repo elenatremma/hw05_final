@@ -3,7 +3,6 @@ import os
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
 
@@ -19,13 +18,10 @@ ALLOWED_HOSTS = [
     '[::1]',
     'testserver',
 ]
-    # 'www.tremma.pythonanywhere.com',
-    # 'tremma.pythonanywhere.com',
 
 LOGIN_URL = 'users:login'
 
 LOGIN_REDIRECT_URL = 'posts:index'
-
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -39,7 +35,6 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'about.apps.AboutConfig',
     'sorl.thumbnail',
-    'debug_toolbar',
 ]
 
 MIDDLEWARE = [
@@ -50,11 +45,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'debug_toolbar.middleware.DebugToolbarMiddleware',
-    ]
-
-INTERNAL_IPS = [
-    '127.0.0.1',
 ]
 
 ROOT_URLCONF = 'yatube.urls'
@@ -83,14 +73,12 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'yatube.wsgi.application'
 
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
     }
 }
-
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -117,7 +105,6 @@ USE_L10N = True
 
 USE_TZ = True
 
-
 STATIC_URL = '/static/'
 
 STATICFILES_DIRS = (os.path.join(BASE_DIR, 'static'),)
@@ -133,3 +120,5 @@ CACHES = {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
     }
 }
+
+
